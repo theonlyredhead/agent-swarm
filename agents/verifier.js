@@ -1,10 +1,18 @@
+import fs from 'fs';
 import { readManifest, writeManifest } from '../orchestrator/index.js';
 import { exec } from '../tools/shell.js';
 import { log } from '../tools/log.js';
 
-export async function verify(workspace) {
+// Scale scenario count based on attempt — cheap early, thorough when close
+function scenarioCount(attempt) {
+  if (attempt <= 1) return 30;
+  if (attempt <= 3) return 50;
+  return 100;
+}
+
+export async function verify(workspace, attempt = 1) {
   const manifest = readManifest(workspace);
-  const testCommand = manifest.navigator_output?.test_command;
+  let testCommand = manifest.navigator_output?.test_command;
 
   if (!testCommand) {
     writeManifest(workspace, {
@@ -13,39 +21,47 @@ export async function verify(workspace) {
     return;
   }
 
-  await log(workspace, `🧪 Verifier: running \`${testCommand}\`...`);
+  // Inject --count for UAT agent runs to scale with attempt number
+  const count = scenarioCount(attempt);
+  if (testCommand.includes('node index.js')) {
+    testCommand = testCommand.replace(/--count \d+/, '').trim() + ` --count ${count}`;
+  }
+
+  await log(workspace, `🧪 Verifier (attempt ${attempt}, ${count} scenarios): running \`${testCommand}\`...`);
 
   const result = exec(testCommand, {
     cwd: workspace,
-    timeout: 180000,
+    timeout: 300000,
     env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY },
   });
 
-  // Check for uat-report.json if it exists (nation-booking style)
   let passed = result.success;
   let passRate = null;
+
   try {
-    const report = JSON.parse(
-      (await import('fs')).default.readFileSync(`${workspace}/uat-report.json`, 'utf8')
-    );
+    const report = JSON.parse(fs.readFileSync(`${workspace}/uat-report.json`, 'utf8'));
     passRate = report.summary?.passRate;
-    const threshold = parseFloat(process.env.UAT_PASS_THRESHOLD ?? '80');
+    const threshold = parseFloat(process.env.UAT_PASS_THRESHOLD ?? '97');
     passed = passRate >= threshold;
+
+    // Fail fast: if pass rate is very low on first attempt, not worth continuing
+    if (attempt === 1 && passRate < 40) {
+      await log(workspace, `⛔ Verifier: pass rate ${passRate}% on first attempt — failing fast`);
+      writeManifest(workspace, {
+        verifier_output: { passed: false, passRate, failFast: true, output: result.output, errors: result.errors ?? '' },
+      });
+      return;
+    }
   } catch {
     // No JSON report — fall back to exit code
   }
 
   writeManifest(workspace, {
-    verifier_output: {
-      passed,
-      passRate,
-      output: result.output,
-      errors: result.errors ?? '',
-    },
+    verifier_output: { passed, passRate, output: result.output, errors: result.errors ?? '' },
   });
 
   await log(workspace,
     passed
-      ? `✅ Verifier: PASS${passRate != null ? ` — UAT pass rate: ${passRate}%` : ''}`
-      : `❌ Verifier: FAIL${passRate != null ? ` — UAT pass rate: ${passRate}%` : ''}\n\`\`\`\n${result.errors || result.output}\n\`\`\``);
+      ? `✅ Verifier: PASS — ${passRate ?? 'ok'}%`
+      : `❌ Verifier: FAIL — ${passRate ?? 'error'}% (attempt ${attempt})\n\`\`\`\n${result.errors || result.output}\n\`\`\``);
 }

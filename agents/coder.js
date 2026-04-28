@@ -25,7 +25,7 @@ export async function code(workspace) {
     systemFile: path.join(__dirname, '../prompts/coder.md'),
     cacheUserPrefix: `Files:\n${fileContents}`,
     userMessage: `Task: ${manifest.task_id}\nRoot cause: ${root_cause_summary}`,
-    model: 'claude-opus-4-7',
+    model: 'claude-sonnet-4-6',
     maxTokens: 16000,
   });
 

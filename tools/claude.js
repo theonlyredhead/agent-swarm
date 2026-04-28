@@ -3,7 +3,7 @@ import fs from 'fs';
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-export async function prompt({ systemFile, userMessage, model = 'claude-opus-4-7', maxTokens = 8000, cacheUserPrefix = null }) {
+export async function prompt({ systemFile, userMessage, model = 'claude-sonnet-4-6', maxTokens = 8000, cacheUserPrefix = null }) {
   const systemText = systemFile ? fs.readFileSync(systemFile, 'utf8') : null;
 
   // System prompt cached — static .md files don't change between runs

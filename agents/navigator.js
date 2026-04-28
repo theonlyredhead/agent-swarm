@@ -39,7 +39,7 @@ export async function navigate(workspace, failureContext) {
   const result = await promptJson({
     systemFile: path.join(__dirname, '../prompts/navigator.md'),
     userMessage,
-    model: 'claude-opus-4-7',
+    model: 'claude-sonnet-4-6',
   });
 
   // Use swarm.config.json overrides if present

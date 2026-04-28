@@ -67,8 +67,9 @@ export async function verify(workspace, attempt = 1) {
     verifier_output: { passed, passRate, output: result.output, errors: result.errors ?? '' },
   });
 
+  const debugOutput = [result.errors, result.output].filter(Boolean).join('\n').slice(0, 1000);
   await log(workspace,
     passed
-      ? `✅ Verifier: PASS — ${passRate ?? 'ok'}%`
-      : `❌ Verifier: FAIL — ${passRate ?? 'error'}% (attempt ${attempt})\n\`\`\`\n${result.errors || result.output}\n\`\`\``);
+      ? `✅ Verifier: PASS — ${passRate}% (attempt ${attempt})`
+      : `❌ Verifier: FAIL — ${passRate ?? 'no report'} (attempt ${attempt})\n\`\`\`\n${debugOutput || 'no output captured'}\n\`\`\``);
 }

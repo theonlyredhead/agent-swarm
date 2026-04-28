@@ -8,7 +8,7 @@ import { prepare, cleanup } from './workspace.js';
 import { addComment, updateStatus, filterTasks } from '../tools/clickup.js';
 import { navigate } from '../agents/navigator.js';
 import { code } from '../agents/coder.js';
-import { verify } from '../agents/verifier.js';
+import { baseline, verify } from '../agents/verifier.js';
 import { report } from '../agents/reporter.js';
 import { log } from '../tools/log.js';
 
@@ -96,6 +96,7 @@ async function processRepo({ jobId, org, orgConfig, repoName, task_id, failure_c
 
     // Run pipeline
     await navigate(workspace, failure_context);
+    await baseline(workspace); // pre-fix pass rate — used by verifier to detect regressions
     await code(workspace);
 
     // UAT loop — iterate until 97% or max attempts

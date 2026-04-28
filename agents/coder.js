@@ -21,10 +21,16 @@ export async function code(workspace) {
     return `=== ${relPath} ===\n${content}`;
   }).join('\n\n');
 
+  const verifierOutput = manifest.verifier_output;
+  const retryContext = verifierOutput
+    ? `\n\nPrevious fix attempt failed (UAT pass rate: ${verifierOutput.passRate ?? 'unknown'}%).\n` +
+      `Test output:\n${(verifierOutput.errors || verifierOutput.output || '').slice(0, 3000)}`
+    : '';
+
   const result = await promptJson({
     systemFile: path.join(__dirname, '../prompts/coder.md'),
     cacheUserPrefix: `Files:\n${fileContents}`,
-    userMessage: `Task: ${manifest.task_id}\nRoot cause: ${root_cause_summary}`,
+    userMessage: `Task: ${manifest.task_id}\nRoot cause: ${root_cause_summary}${retryContext}`,
     model: 'claude-sonnet-4-6',
     maxTokens: 16000,
   });

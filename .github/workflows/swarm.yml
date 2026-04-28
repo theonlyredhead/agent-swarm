@@ -26,3 +26,4 @@ jobs:
           GH_CORONATION_TOKEN: ${{ secrets.GH_CORONATION_TOKEN }}
           CLICKUP_API_KEY: ${{ secrets.CLICKUP_API_KEY }}
           CLICKUP_LIST_ID: ${{ secrets.CLICKUP_LIST_ID }}
+          TRIAGE_CONFIDENCE_THRESHOLD: "0.85"

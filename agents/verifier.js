@@ -23,7 +23,7 @@ export async function verify(workspace, attempt = 1) {
 
   // Inject --count for UAT agent runs to scale with attempt number
   const count = scenarioCount(attempt);
-  if (testCommand.includes('node index.js')) {
+  if (testCommand.includes('index.js')) {
     testCommand = testCommand.replace(/--count \d+/, '').trim() + ` --count ${count}`;
   }
 

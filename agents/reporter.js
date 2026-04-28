@@ -8,11 +8,11 @@ import { prompt } from '../tools/claude.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-export async function report({ workspace, org, orgConfig, repoName, task_id, branch }) {
+export async function report({ workspace, org, orgConfig, repoName, task_id, branch, passed }) {
   const manifest = readManifest(workspace);
   const { verifier_output, coder_output, navigator_output } = manifest;
 
-  if (!verifier_output.passed) {
+  if (!passed) {
     console.log(`[reporter] Tests failed — flagging for human review`);
     await addComment(task_id, orgConfig.clickupApiKey,
       `Agent attempted fix on \`${repoName}\` but tests did not pass.\n\n` +

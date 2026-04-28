@@ -10,6 +10,7 @@ import { navigate } from '../agents/navigator.js';
 import { code } from '../agents/coder.js';
 import { verify } from '../agents/verifier.js';
 import { report } from '../agents/reporter.js';
+import { log } from '../tools/log.js';
 
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REPOS ?? '5');
 
@@ -90,8 +91,27 @@ async function processRepo({ jobId, org, orgConfig, repoName, task_id, failure_c
     // Run pipeline
     await navigate(workspace, failure_context);
     await code(workspace);
-    await verify(workspace);
-    await report({ workspace, org, orgConfig, repoName, task_id, branch });
+
+    // UAT loop — iterate until 97% or max attempts
+    const MAX_ATTEMPTS = parseInt(process.env.MAX_UAT_ATTEMPTS ?? '5');
+    let attempt = 1;
+    let verifierPassed = false;
+
+    while (attempt <= MAX_ATTEMPTS) {
+      await verify(workspace, attempt);
+      const { passed, passRate, failFast } = readManifest(workspace).verifier_output;
+
+      if (passed) { verifierPassed = true; break; }
+      if (failFast) break;
+      if (attempt === MAX_ATTEMPTS) break;
+
+      // Re-run coder with failure context before next attempt
+      await log(workspace, `🔁 Retrying fix (attempt ${attempt + 1}/${MAX_ATTEMPTS}) — pass rate was ${passRate ?? 'unknown'}%`);
+      await code(workspace);
+      attempt++;
+    }
+
+    await report({ workspace, org, orgConfig, repoName, task_id, branch, passed: verifierPassed });
 
   } catch (err) {
     console.error(`[job:${jobId}] ${repoName} failed: ${err.message}`);

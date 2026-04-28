@@ -33,6 +33,9 @@ export async function run({ org, task_id, failure_context, status = 'agent picku
     task_id = top.id;
     failure_context = `${top.name}\n\n${top.description ?? ''}`.trim();
     console.log(`[job:${jobId}] Picked up task ${task_id}: ${top.name}`);
+
+    // Lock the task immediately so concurrent runs skip it
+    await updateStatus(task_id, orgConfig.clickupApiKey, 'in progress');
   }
 
   console.log(`[job:${jobId}] Starting — org=${org} task=${task_id}`);

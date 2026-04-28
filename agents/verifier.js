@@ -38,8 +38,15 @@ export async function verify(workspace, attempt = 1) {
   let passed = result.success;
   let passRate = null;
 
+  // UAT agent writes report relative to its own dir (uat-agent/uat-report.json)
+  const reportCandidates = [
+    `${workspace}/uat-agent/uat-report.json`,
+    `${workspace}/uat-report.json`,
+  ];
+  const reportPath = reportCandidates.find(p => fs.existsSync(p));
+
   try {
-    const report = JSON.parse(fs.readFileSync(`${workspace}/uat-report.json`, 'utf8'));
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
     passRate = report.summary?.passRate;
     const threshold = parseFloat(process.env.UAT_PASS_THRESHOLD ?? '97');
     passed = passRate >= threshold;

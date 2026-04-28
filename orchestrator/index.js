@@ -14,14 +14,14 @@ import { log } from '../tools/log.js';
 
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REPOS ?? '5');
 
-export async function run({ org, task_id, failure_context }) {
+export async function run({ org, task_id, failure_context, status = 'agent pickup' }) {
   const jobId = randomUUID();
   const orgConfig = getOrg(org);
 
-  // If no task supplied, fetch highest priority "Agent Execute" task from ClickUp
+  // If no task supplied, fetch highest priority task from ClickUp
   if (!task_id) {
     const listId = process.env.CLICKUP_LIST_ID;
-    const result = await filterTasks(listId, orgConfig.clickupApiKey, 'Agent Execute');
+    const result = await filterTasks(listId, orgConfig.clickupApiKey, status);
     const tasks = result.tasks ?? [];
     if (tasks.length === 0) {
       console.log(`[job:${jobId}] No Agent Execute tasks found — exiting`);

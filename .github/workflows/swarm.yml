@@ -26,9 +26,8 @@ jobs:
             --failure "${{ github.event.client_payload.failure_context }}"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          NATION_GH_TOKEN: ${{ secrets.NATION_GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
           NATION_CU_KEY: ${{ secrets.NATION_CU_KEY }}
           NATION_CU_WORKSPACE: ${{ secrets.NATION_CU_WORKSPACE }}
-          CORONATION_GH_TOKEN: ${{ secrets.CORONATION_GH_TOKEN }}
           CORONATION_CU_KEY: ${{ secrets.CORONATION_CU_KEY }}
           CORONATION_CU_WORKSPACE: ${{ secrets.CORONATION_CU_WORKSPACE }}

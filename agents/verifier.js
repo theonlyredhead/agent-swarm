@@ -37,7 +37,7 @@ export async function verify(workspace, attempt = 1) {
 
   const result = exec(testCommand, {
     cwd: workspace,
-    timeout: 300000,
+    timeout: 900000, // 15 min — batch API needs time to process
     env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY },
   });
 

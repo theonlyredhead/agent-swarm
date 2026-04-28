@@ -1,0 +1,34 @@
+name: Agent Swarm
+
+on:
+  repository_dispatch:
+    types: [uat-failure]
+
+jobs:
+  swarm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run swarm
+        run: |
+          node cli.js \
+            --org "${{ github.event.client_payload.org }}" \
+            --task "${{ github.event.client_payload.task_id }}" \
+            --failure "${{ github.event.client_payload.failure_context }}"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NATION_GH_TOKEN: ${{ secrets.NATION_GH_TOKEN }}
+          NATION_CU_KEY: ${{ secrets.NATION_CU_KEY }}
+          NATION_CU_WORKSPACE: ${{ secrets.NATION_CU_WORKSPACE }}
+          CORONATION_GH_TOKEN: ${{ secrets.CORONATION_GH_TOKEN }}
+          CORONATION_CU_KEY: ${{ secrets.CORONATION_CU_KEY }}
+          CORONATION_CU_WORKSPACE: ${{ secrets.CORONATION_CU_WORKSPACE }}

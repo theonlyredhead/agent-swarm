@@ -5,6 +5,8 @@ export const orgs = {
     clickupListId: process.env.CLICKUP_LIST_ID,
     defaultBranch: 'main',
     prTargetBranch: 'main',
+    statusDone: 'PR raised',
+    statusFailed: 'Review',
   },
   'coronation-property': {
     githubToken: process.env.GH_CORONATION_TOKEN,
@@ -12,6 +14,8 @@ export const orgs = {
     clickupListId: process.env.CLICKUP_LIST_ID,
     defaultBranch: 'main',
     prTargetBranch: 'main',
+    statusDone: 'PR raised',
+    statusFailed: 'Review',
   },
 };
 

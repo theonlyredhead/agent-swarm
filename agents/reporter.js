@@ -18,7 +18,7 @@ export async function report({ workspace, org, orgConfig, repoName, task_id, bra
       `Agent attempted fix on \`${repoName}\` but tests did not pass.\n\n` +
       `**Test output:**\n\`\`\`\n${verifier_output.errors || verifier_output.output}\n\`\`\``
     );
-    await updateStatus(task_id, orgConfig.clickupApiKey, 'needs human');
+    await updateStatus(task_id, orgConfig.clickupApiKey, orgConfig.statusFailed);
     return;
   }
 
@@ -51,5 +51,5 @@ export async function report({ workspace, org, orgConfig, repoName, task_id, bra
   await addComment(task_id, orgConfig.clickupApiKey,
     `PR raised for \`${repoName}\`: ${prUrl}${passRate}`
   );
-  await updateStatus(task_id, orgConfig.clickupApiKey, 'PR raised');
+  await updateStatus(task_id, orgConfig.clickupApiKey, orgConfig.statusDone);
 }

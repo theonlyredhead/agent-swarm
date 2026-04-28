@@ -27,7 +27,13 @@ export async function verify(workspace, attempt = 1) {
     testCommand = testCommand.replace(/--count \d+/, '').trim() + ` --count ${count}`;
   }
 
-  await log(workspace, `🧪 Verifier (attempt ${attempt}, ${count} scenarios): running \`${testCommand}\`...`);
+  // Pre-flight check — log workspace state and env to ClickUp
+  const hasKey = !!process.env.ANTHROPIC_API_KEY;
+  const uatExists = fs.existsSync(`${workspace}/uat-agent`);
+  const pkgExists = fs.existsSync(`${workspace}/uat-agent/package.json`);
+  await log(workspace, `🧪 Verifier pre-check:\n- ANTHROPIC_API_KEY: ${hasKey ? 'set ✓' : 'MISSING ✗'}\n- uat-agent dir: ${uatExists ? 'exists ✓' : 'MISSING ✗'}\n- uat-agent/package.json: ${pkgExists ? 'exists ✓' : 'MISSING ✗'}\n- Command: \`${testCommand}\``);
+
+  await log(workspace, `🧪 Verifier (attempt ${attempt}, ${count} scenarios): running...`);
 
   const result = exec(testCommand, {
     cwd: workspace,

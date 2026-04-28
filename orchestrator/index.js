@@ -29,7 +29,7 @@ export async function run({ org, task_id, failure_context }) {
 
   if (triaged.length === 0) {
     await addComment(task_id, orgConfig.clickupApiKey,
-      'Agent swarm found no repos with sufficient confidence. Manual review required.');
+      'Agent swarm: no repos matched with sufficient confidence. Manual review required.');
     await updateStatus(task_id, orgConfig.clickupApiKey, 'needs human');
     return;
   }

@@ -1,17 +1,17 @@
 export const orgs = {
   'nation-management': {
-    githubToken: process.env.GH_TOKEN,
-    clickupApiKey: process.env.NATION_CU_KEY,
-    clickupWorkspaceId: process.env.NATION_CU_WORKSPACE,
+    githubToken: process.env.GH_NATION_TOKEN,
+    clickupApiKey: process.env.CLICKUP_API_KEY,
+    clickupListId: process.env.CLICKUP_LIST_ID,
     defaultBranch: 'main',
     prTargetBranch: 'main',
   },
   'coronation-property': {
-    githubToken: process.env.GH_TOKEN,
-    clickupApiKey: process.env.CORONATION_CU_KEY,
-    clickupWorkspaceId: process.env.CORONATION_CU_WORKSPACE,
-    defaultBranch: 'develop',
-    prTargetBranch: 'develop',
+    githubToken: process.env.GH_CORONATION_TOKEN,
+    clickupApiKey: process.env.CLICKUP_API_KEY,
+    clickupListId: process.env.CLICKUP_LIST_ID,
+    defaultBranch: 'main',
+    prTargetBranch: 'main',
   },
 };
 

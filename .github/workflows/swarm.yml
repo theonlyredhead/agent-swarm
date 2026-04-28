@@ -26,8 +26,7 @@ jobs:
             --failure "${{ github.event.client_payload.failure_context }}"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-          NATION_CU_KEY: ${{ secrets.NATION_CU_KEY }}
-          NATION_CU_WORKSPACE: ${{ secrets.NATION_CU_WORKSPACE }}
-          CORONATION_CU_KEY: ${{ secrets.CORONATION_CU_KEY }}
-          CORONATION_CU_WORKSPACE: ${{ secrets.CORONATION_CU_WORKSPACE }}
+          GH_NATION_TOKEN: ${{ secrets.GH_NATION_TOKEN }}
+          GH_CORONATION_TOKEN: ${{ secrets.GH_CORONATION_TOKEN }}
+          CLICKUP_API_KEY: ${{ secrets.CLICKUP_API_KEY }}
+          CLICKUP_LIST_ID: ${{ secrets.CLICKUP_LIST_ID }}

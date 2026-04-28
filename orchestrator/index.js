@@ -5,7 +5,7 @@ import { getOrg } from '../config/orgs.js';
 import { listRepos } from '../tools/github.js';
 import { triageRepos } from './triage.js';
 import { prepare, cleanup } from './workspace.js';
-import { addComment, updateStatus } from '../tools/clickup.js';
+import { addComment, updateStatus, filterTasks } from '../tools/clickup.js';
 import { navigate } from '../agents/navigator.js';
 import { code } from '../agents/coder.js';
 import { verify } from '../agents/verifier.js';

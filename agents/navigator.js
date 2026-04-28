@@ -4,11 +4,12 @@ import { fileURLToPath } from 'url';
 import { promptJson } from '../tools/claude.js';
 import { readManifest, writeManifest } from '../orchestrator/index.js';
 import { exec } from '../tools/shell.js';
+import { log } from '../tools/log.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function navigate(workspace, failureContext) {
-  console.log(`[navigator] Mapping ${workspace}`);
+  await log(workspace, `🗺️ Navigator: mapping repo structure...`);
 
   // Check for swarm.config.json
   let swarmConfig = null;
@@ -46,5 +47,10 @@ export async function navigate(workspace, failureContext) {
   if (swarmConfig?.entry_points) result.entry_points = swarmConfig.entry_points;
 
   writeManifest(workspace, { navigator_output: result });
-  console.log(`[navigator] Found ${result.relevant_files?.length ?? 0} relevant files`);
+  await log(workspace,
+    `🗺️ Navigator done.\n` +
+    `**Relevant files:** ${(result.relevant_files ?? []).map(f => `\`${f}\``).join(', ')}\n` +
+    `**Root cause:** ${result.root_cause_summary}\n` +
+    `**Test command:** \`${result.test_command}\`\n` +
+    `**Confidence:** ${Math.round((result.confidence ?? 0) * 100)}%`);
 }

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { promptJson } from '../tools/claude.js';
 import { readManifest, writeManifest } from '../orchestrator/index.js';
 import { commitAll } from '../tools/git.js';
+import { log } from '../tools/log.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -11,7 +12,7 @@ export async function code(workspace) {
   const manifest = readManifest(workspace);
   const { relevant_files, root_cause_summary, test_command } = manifest.navigator_output;
 
-  console.log(`[coder] Writing fix for ${manifest.task_id}`);
+  await log(workspace, `🔧 Coder: applying fix to ${relevant_files.map(f => `\`${f}\``).join(', ')}...`);
 
   // Read relevant file contents
   const fileContents = relevant_files.map(relPath => {
@@ -44,5 +45,8 @@ export async function code(workspace) {
     },
   });
 
-  console.log(`[coder] Fixed ${result.files.length} file(s): ${result.summary}`);
+  await log(workspace,
+    `🔧 Coder done.\n` +
+    `**Files changed:** ${result.files.map(f => `\`${f.path}\``).join(', ')}\n` +
+    `**Summary:** ${result.summary}`);
 }

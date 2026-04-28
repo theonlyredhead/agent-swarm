@@ -1,5 +1,6 @@
 import { readManifest, writeManifest } from '../orchestrator/index.js';
 import { exec } from '../tools/shell.js';
+import { log } from '../tools/log.js';
 
 export async function verify(workspace) {
   const manifest = readManifest(workspace);
@@ -12,7 +13,7 @@ export async function verify(workspace) {
     return;
   }
 
-  console.log(`[verifier] Running: ${testCommand}`);
+  await log(workspace, `🧪 Verifier: running \`${testCommand}\`...`);
 
   const result = exec(testCommand, {
     cwd: workspace,
@@ -43,5 +44,8 @@ export async function verify(workspace) {
     },
   });
 
-  console.log(`[verifier] ${passed ? 'PASS' : 'FAIL'}${passRate != null ? ` (${passRate}%)` : ''}`);
+  await log(workspace,
+    passed
+      ? `✅ Verifier: PASS${passRate != null ? ` — UAT pass rate: ${passRate}%` : ''}`
+      : `❌ Verifier: FAIL${passRate != null ? ` — UAT pass rate: ${passRate}%` : ''}\n\`\`\`\n${result.errors || result.output}\n\`\`\``);
 }

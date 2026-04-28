@@ -52,7 +52,8 @@ export async function run({ org, task_id, failure_context }) {
   }
 
   await addComment(task_id, orgConfig.clickupApiKey,
-    `Agent swarm picked up this task. Checking ${triaged.length} repo(s): ${triaged.map(r => r.repo).join(', ')}`);
+    `🤖 Agent swarm picked up this task.\n` +
+    `Discovered ${repos.length} repos → triaged to ${triaged.length} relevant: ${triaged.map(r => `\`${r.repo}\` (${Math.round(r.confidence * 100)}%)`).join(', ')}`);
 
   // 3. Process repos in parallel (up to MAX_CONCURRENT)
   const batches = chunk(triaged, MAX_CONCURRENT);
@@ -80,6 +81,7 @@ async function processRepo({ jobId, org, orgConfig, repoName, task_id, failure_c
     const jobManifest = {
       job_id: jobId, org, task_id, failure_context,
       repo: repoName, workspace,
+      clickup_api_key: orgConfig.clickupApiKey,
       navigator_output: null, coder_output: null,
       verifier_output: null, reporter_output: null,
     };

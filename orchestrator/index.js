@@ -40,12 +40,15 @@ export async function run({ org, task_id, failure_context, status = 'agent picku
 
   console.log(`[job:${jobId}] Starting — org=${org} task=${task_id}`);
 
-  // 1. Discover repos
-  const repos = await listRepos(org, orgConfig.githubToken);
-  console.log(`[job:${jobId}] Discovered ${repos.length} active repos`);
+  // 1. Discover repos — filter to only those with swarm.config.json enabled
+  const allRepos = await listRepos(org, orgConfig.githubToken);
+  const repos = await filterSwarmEnabled(allRepos, org, orgConfig.githubToken);
+  console.log(`[job:${jobId}] Discovered ${allRepos.length} repos → ${repos.length} swarm-enabled`);
 
-  // 2. Triage — find relevant repos
-  const triaged = await triageRepos(failure_context, repos);
+  // 2. Triage — find relevant repos (much smaller set now)
+  const triaged = repos.length === 1
+    ? [{ repo: repos[0].name, confidence: 1.0, reason: 'Only swarm-enabled repo' }]
+    : await triageRepos(failure_context, repos);
   console.log(`[job:${jobId}] Triaged to ${triaged.length} relevant repos`);
 
   if (triaged.length === 0) {
@@ -133,6 +136,24 @@ export function writeManifest(workspace, data) {
 export function readManifest(workspace) {
   const p = path.join(workspace, 'job.json');
   return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+}
+
+async function filterSwarmEnabled(repos, org, token) {
+  const results = await Promise.all(repos.map(async repo => {
+    try {
+      const res = await fetch(
+        `https://api.github.com/repos/${org}/${repo.name}/contents/swarm.config.json`,
+        { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } }
+      );
+      if (!res.ok) return null;
+      const file = await res.json();
+      const config = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
+      return config.enabled !== false ? repo : null;
+    } catch {
+      return null;
+    }
+  }));
+  return results.filter(Boolean);
 }
 
 function chunk(arr, size) {

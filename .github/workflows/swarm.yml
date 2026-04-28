@@ -19,11 +19,7 @@ jobs:
       - run: npm ci
 
       - name: Run swarm
-        run: |
-          node cli.js \
-            --org "${{ github.event.client_payload.org }}" \
-            --task "${{ github.event.client_payload.task_id }}" \
-            --failure "${{ github.event.client_payload.failure_context }}"
+        run: node cli.js --org nation-management
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_NATION_TOKEN: ${{ secrets.GH_NATION_TOKEN }}

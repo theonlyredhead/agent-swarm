@@ -15,9 +15,26 @@ const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REPOS ?? '5');
 
 export async function run({ org, task_id, failure_context }) {
   const jobId = randomUUID();
-  console.log(`[job:${jobId}] Starting — org=${org} task=${task_id}`);
-
   const orgConfig = getOrg(org);
+
+  // If no task supplied, fetch highest priority "Agent Execute" task from ClickUp
+  if (!task_id) {
+    const listId = process.env.CLICKUP_LIST_ID;
+    const result = await filterTasks(listId, orgConfig.clickupApiKey, 'Agent Execute');
+    const tasks = result.tasks ?? [];
+    if (tasks.length === 0) {
+      console.log(`[job:${jobId}] No Agent Execute tasks found — exiting`);
+      return;
+    }
+    const priority = { urgent: 0, high: 1, normal: 2, low: 3 };
+    tasks.sort((a, b) => (priority[a.priority?.priority] ?? 9) - (priority[b.priority?.priority] ?? 9));
+    const top = tasks[0];
+    task_id = top.id;
+    failure_context = `${top.name}\n\n${top.description ?? ''}`.trim();
+    console.log(`[job:${jobId}] Picked up task ${task_id}: ${top.name}`);
+  }
+
+  console.log(`[job:${jobId}] Starting — org=${org} task=${task_id}`);
 
   // 1. Discover repos
   const repos = await listRepos(org, orgConfig.githubToken);

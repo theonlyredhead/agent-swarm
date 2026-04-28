@@ -10,8 +10,8 @@ const org = get('--org');
 const task_id = get('--task');
 const failure_context = get('--failure');
 
-if (!org || !task_id || !failure_context) {
-  console.error('Usage: node cli.js --org <org> --task <task_id> --failure "<context>"');
+if (!org) {
+  console.error('Usage: node cli.js --org <org> [--task <task_id> --failure "<context>"]');
   process.exit(1);
 }
 

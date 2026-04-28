@@ -148,12 +148,20 @@ async function filterSwarmEnabled(repos, org, token) {
       if (!res.ok) return null;
       const file = await res.json();
       const config = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));
-      return config.enabled !== false ? repo : null;
+      const enabled = config.enabled !== false;
+      if (enabled) console.log(`[filter] swarm-enabled: ${repo.name}`);
+      return enabled ? repo : null;
     } catch {
       return null;
     }
   }));
-  return results.filter(Boolean);
+  const enabled = results.filter(Boolean);
+  // Fallback: if no opted-in repos found (token lacks contents:read), use all repos
+  if (enabled.length === 0) {
+    console.log('[filter] No swarm.config.json found — falling back to full repo list for triage');
+    return repos;
+  }
+  return enabled;
 }
 
 function chunk(arr, size) {

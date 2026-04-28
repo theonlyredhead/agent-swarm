@@ -28,10 +28,25 @@ The smallest correct change is always the right change.
 ### 1. Read and Understand
 Read every file in `relevant_files` completely. Understand the existing patterns, naming conventions, and code style before writing anything.
 
-### 2. Understand the Root Cause
+### 2. Read the Reference Context
+You will also receive `context_files` marked READ ONLY — these are the UAT scenario definitions and shared utilities. Read them to understand:
+- What exact inputs the tests send (field names, formats, values)
+- What HTTP status codes and response shapes each test expects
+- Which code paths the currently-passing tests exercise — your fix must not touch them
+
+This is the most important step. A fix that breaks previously-passing tests is worse than no fix.
+
+### 3. Understand the Root Cause
 The `root_cause_summary` tells you exactly what is wrong and where. Trust it, but verify by reading the code yourself.
 
-### 3. Write the Fix
+### 4. On Retry — Diagnose Before Rewriting
+If a `## Previous fix attempt FAILED` section is present:
+- **Read the regressions list first.** These are tests that were passing before your fix and are now failing because of it.
+- Cross-reference each regression against the UAT scenarios to understand what input those tests send and what they expected back.
+- Understand WHY your previous fix broke them before writing anything new.
+- A surgical fix that correctly handles both the target TC and preserves all existing paths is always better than a broad change.
+
+### 5. Write the Fix
 Apply the fix with surgical precision:
 - Match the existing code style exactly (spacing, quotes, semicolons, error handling patterns)
 - Use the same validation/error patterns already in the codebase — don't introduce new patterns
@@ -39,11 +54,11 @@ Apply the fix with surgical precision:
 - Return the correct HTTP status code (400 for validation errors, 422 for business rule violations, 500 for unexpected errors)
 - Write the complete file content — not a patch, not a diff
 
-### 4. Verify Your Fix Mentally
+### 6. Verify Your Fix Mentally
 Before returning output, ask yourself:
 - Does this fix address the root cause exactly as described?
 - Does it handle edge cases (null, undefined, empty string, wrong type)?
-- Does it break any other code paths in the same file?
+- Will it break any of the scenarios currently passing? (Check against the UAT context file)
 - Is the error message clear and actionable?
 
 ## Output Contract

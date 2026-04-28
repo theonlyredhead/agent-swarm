@@ -8,28 +8,73 @@ import { log } from '../tools/log.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+function readFile(workspace, relPath) {
+  const abs = path.join(workspace, relPath);
+  return fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '(file not found)';
+}
+
+function buildRetryContext(manifest) {
+  const v = manifest.verifier_output;
+  if (!v) return '';
+
+  const lines = [
+    `\n\n## Previous fix attempt FAILED — read this carefully before writing a new fix`,
+    `Pass rate: ${v.passRate ?? 'unknown'}% (baseline was ${v.baselinePassRate ?? v.passRate ?? 'unknown'}%)`,
+  ];
+
+  if (v.tcCode) {
+    lines.push(v.tcPassed
+      ? `Target ${v.tcCode}: ✅ PASSES — but you introduced regressions (see below)`
+      : `Target ${v.tcCode}: ❌ STILL FAILING`);
+  }
+
+  if (v.regressions?.length) {
+    lines.push(`\n**Regressions you introduced** (were passing before, now broken by your fix):`);
+    lines.push(v.regressions.map(id => `  - ${id}`).join('\n'));
+    lines.push(`\nThese were working correctly before you touched the code. Your fix broke them.`);
+    lines.push(`Read the UAT scenario file and the source file carefully — understand what inputs`);
+    lines.push(`these tests send and why your change broke their path before writing a new fix.`);
+  }
+
+  if (v.improvements?.length) {
+    lines.push(`\n**Improvements** (now passing that weren't before):`);
+    lines.push(v.improvements.map(id => `  - ${id}`).join('\n'));
+  }
+
+  const testOutput = (v.errors || v.output || '').trim().slice(0, 3000);
+  if (testOutput) {
+    lines.push(`\n**Test output:**\n\`\`\`\n${testOutput}\n\`\`\``);
+  }
+
+  return lines.join('\n');
+}
+
 export async function code(workspace) {
   const manifest = readManifest(workspace);
-  const { relevant_files, root_cause_summary, test_command } = manifest.navigator_output;
+  const { relevant_files, context_files, root_cause_summary } = manifest.navigator_output;
 
   await log(workspace, `🔧 Coder: applying fix to ${relevant_files.map(f => `\`${f}\``).join(', ')}...`);
 
-  // Read relevant file contents
-  const fileContents = relevant_files.map(relPath => {
-    const absPath = path.join(workspace, relPath);
-    const content = fs.existsSync(absPath) ? fs.readFileSync(absPath, 'utf8') : '(file not found)';
-    return `=== ${relPath} ===\n${content}`;
-  }).join('\n\n');
+  // Files to edit — full content
+  const fileContents = relevant_files.map(relPath =>
+    `=== ${relPath} (EDIT THIS) ===\n${readFile(workspace, relPath)}`
+  ).join('\n\n');
 
-  const verifierOutput = manifest.verifier_output;
-  const retryContext = verifierOutput
-    ? `\n\nPrevious fix attempt failed (UAT pass rate: ${verifierOutput.passRate ?? 'unknown'}%).\n` +
-      `Test output:\n${(verifierOutput.errors || verifierOutput.output || '').slice(0, 3000)}`
-    : '';
+  // Context files — read for understanding, do not edit
+  const contextContents = (context_files ?? []).map(relPath =>
+    `=== ${relPath} (READ ONLY — understand what inputs tests send) ===\n${readFile(workspace, relPath).slice(0, 4000)}`
+  ).join('\n\n');
+
+  const cachePrefix = [
+    `Files to edit:\n${fileContents}`,
+    contextContents ? `Reference context (do not edit):\n${contextContents}` : '',
+  ].filter(Boolean).join('\n\n');
+
+  const retryContext = buildRetryContext(manifest);
 
   const result = await promptJson({
     systemFile: path.join(__dirname, '../prompts/coder.md'),
-    cacheUserPrefix: `Files:\n${fileContents}`,
+    cacheUserPrefix: cachePrefix,
     userMessage: `Task: ${manifest.task_id}\nRoot cause: ${root_cause_summary}${retryContext}`,
     model: 'claude-sonnet-4-6',
     maxTokens: 16000,

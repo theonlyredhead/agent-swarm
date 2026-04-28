@@ -106,14 +106,17 @@ async function processRepo({ jobId, org, orgConfig, repoName, task_id, failure_c
 
     while (attempt <= MAX_ATTEMPTS) {
       await verify(workspace, attempt);
-      const { passed, passRate, failFast } = readManifest(workspace).verifier_output;
+      const { passed, passRate, regressions, improvements } = readManifest(workspace).verifier_output;
 
       if (passed) { verifierPassed = true; break; }
-      if (failFast) break;
       if (attempt === MAX_ATTEMPTS) break;
 
-      // Re-run coder with failure context before next attempt
-      await log(workspace, `🔁 Retrying fix (attempt ${attempt + 1}/${MAX_ATTEMPTS}) — pass rate was ${passRate ?? 'unknown'}%`);
+      const delta = [
+        regressions?.length ? `${regressions.length} regression(s)` : '',
+        improvements?.length ? `${improvements.length} improvement(s)` : '',
+      ].filter(Boolean).join(', ') || 'no change';
+
+      await log(workspace, `🔁 Retrying fix (attempt ${attempt + 1}/${MAX_ATTEMPTS}) — ${passRate ?? '?'}% pass rate, ${delta}`);
       await code(workspace);
       attempt++;
     }

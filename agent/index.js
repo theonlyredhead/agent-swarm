@@ -138,10 +138,13 @@ export async function runAgent({
 
   // ── Report outcome ──────────────────────────────────────────────────────────
   if (result.status === 'success') {
-    // Commit any uncommitted changes
-    commitAll(workspace, `fix(uat): ${task_id} — ${result.summary.slice(0, 72)}`);
+    // Commit any uncommitted changes (agent uses patch_file which doesn't auto-commit)
+    const commitResult = commitAll(workspace, `fix(uat): ${task_id} — ${result.summary.slice(0, 72)}`);
+    if (commitResult.skipped) {
+      console.log('[agent] Nothing new to commit — workspace may already be clean');
+    }
 
-    // Push branch
+    // Push branch — throws if push fails
     push(workspace, branch, orgConfig.githubToken);
 
     // Build PR description

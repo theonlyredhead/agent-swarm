@@ -164,7 +164,7 @@ export async function verify(workspace, attempt = 1) {
   if (report) {
     passRate = report.summary?.passRate ?? report.passRate ?? null;
 
-    const { passed: currentPassing } = extractScenarioSets(report);
+    const { passing: currentPassing } = extractScenarioSets(report);
     const currentPassingSet = new Set(currentPassing);
 
     regressions = [...baselinePassing].filter(id => !currentPassingSet.has(id));

@@ -16,8 +16,12 @@ export function commitAll(cwd, message) {
   exec(`git config user.email "swarm@nation.com.au"`, { cwd });
   exec(`git config user.name "Nation Agent Swarm"`, { cwd });
   exec(`git add -A`, { cwd });
-  const result = exec(`git commit -m "${message}"`, { cwd });
-  if (!result.success && result.errors?.includes('nothing to commit')) {
+  // Write message to file — avoids shell quoting issues with backticks, $, quotes, etc.
+  const msgFile = path.join(cwd, '.git-commit-msg');
+  fs.writeFileSync(msgFile, message, 'utf8');
+  const result = exec(`git commit -F .git-commit-msg`, { cwd });
+  try { fs.unlinkSync(msgFile); } catch {}
+  if (!result.success && (result.errors?.includes('nothing to commit') || result.output?.includes('nothing to commit'))) {
     return { success: false, output: 'nothing to commit', skipped: true };
   }
   return result;

@@ -72,6 +72,28 @@ Read the file first to copy the exact string you want to replace.`,
     },
   },
   {
+    name: 'verify_tc',
+    description: `Run a targeted test focused specifically on the failing TC scenario type.
+Unlike run_tests (which generates random scenarios), this generates scenarios
+that specifically exercise the exact input pattern from the failing TC.
+Use this after applying your fix to confirm the specific bug is resolved.
+Returns pass rate and whether the targeted scenarios pass.`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        tc_description: {
+          type: 'string',
+          description: 'Description of the failing TC, e.g. "POST /checkout with bookingtime field omitted should return 400"',
+        },
+        count: {
+          type: 'number',
+          description: 'Number of targeted scenarios to generate (default 10)',
+        },
+      },
+      required: ['tc_description'],
+    },
+  },
+  {
     name: 'complete',
     description: 'Call this when you are done — either the fix is verified and ready for PR, or you are escalating.',
     input_schema: {
@@ -173,6 +195,43 @@ export function createToolHandlers(workspace, testCommand, orgConfig, task_id) {
         total,
         output: (result.output || '').slice(-2000),
         errors: (result.errors || '').slice(-500),
+      }, null, 2);
+    },
+
+    verify_tc: async ({ tc_description, count = 10 }) => {
+      // Build a targeted test command that biases scenario generation toward the failing TC
+      const uatDir = path.join(workspace, 'uat-agent');
+      if (!fs.existsSync(uatDir)) return 'uat-agent directory not found';
+
+      const cmd = testCommand
+        .replace(/--count \d+/, '').trim()
+        + ` --count ${count} --focus "${tc_description.replace(/"/g, "'")}"`;
+
+      const result = exec(cmd, {
+        cwd: workspace,
+        timeout: 600000,
+        env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY },
+      });
+
+      const reportCandidates = [
+        path.join(workspace, 'uat-agent/uat-report.json'),
+        path.join(workspace, 'uat-report.json'),
+      ];
+      const reportPath = reportCandidates.find(p => fs.existsSync(p));
+      let report = null;
+      try { report = JSON.parse(fs.readFileSync(reportPath, 'utf8')); } catch {}
+
+      const passRate = report?.summary?.passRate ?? report?.passRate ?? null;
+      const passed = report?.summary?.passed ?? null;
+      const total = report?.summary?.total ?? count;
+
+      return JSON.stringify({
+        tc_description,
+        pass_rate: passRate,
+        passed,
+        total,
+        verdict: passRate !== null ? (passRate >= 80 ? 'TC FIXED ✅' : 'TC STILL FAILING ❌') : 'no report',
+        output: (result.output || '').slice(-1500),
       }, null, 2);
     },
 

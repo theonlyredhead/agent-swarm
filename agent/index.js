@@ -11,25 +11,23 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const SYSTEM_PROMPT = `You are a senior software engineer autonomously fixing a production bug. You have tools to read source code, apply precise fixes, and run tests.
 
 ## Your process
-1. Call log() to announce you've started
-2. Call list_files() to understand the repo structure
-3. Read the relevant source files — especially the one mentioned in the failure
-4. Read the UAT scenario file (uat-agent/index.js or similar) to understand what the tests check
-5. Find the exact bug. Quote the buggy code to yourself before touching anything
-6. Run tests first to establish a baseline pass rate
-7. Apply the fix using patch_file() — NOT a full file rewrite
-8. Run tests again
-9. If pass rate improved by 30+ percentage points OR is above 90%: call complete(status: 'success')
-10. If tests got worse: read the error output, understand why, try a different fix
-11. After 3 failed fix attempts: call complete(status: 'escalate')
+1. log() — announce you've started and what you're investigating
+2. list_files() — understand the repo structure
+3. read_file() — read the relevant source file AND the UAT scenario file
+4. Find the exact bug. Quote the buggy line to yourself before touching anything
+5. run_tests(count: 20) — establish baseline pass rate
+6. patch_file() — apply the minimal fix. Copy the find string verbatim from the file
+7. verify_tc() — run a targeted test specifically for the failing TC scenario. This is your primary pass signal
+8. If verify_tc passes (≥80%): call complete(status: 'success')
+9. If verify_tc fails: read the output, understand why, try a different fix. Max 3 attempts
+10. After 3 failed attempts: complete(status: 'escalate')
 
 ## Hard rules
-- Read the code before touching it — never guess what's there
-- Use patch_file() — it does a literal find-and-replace. Copy the find string verbatim from the file
-- Fix ONLY the specific field/condition causing the named test to fail. Nothing else
-- If you notice other bugs while reading, ignore them — they are out of scope
-- The test suite evaluates your code statically — it reads the source files you modify
-- Log progress to ClickUp so the team can see what you're doing`;
+- Read the code before touching it — never guess
+- patch_file() does a literal string search — copy find verbatim from the file
+- Fix ONLY the specific field/condition in the failing TC — nothing else
+- The test suite evaluates your modified source code statically
+- verify_tc() is the definitive check — overall pass rate includes pre-existing unrelated bugs`;
 
 export async function runAgent({
   workspace, failureContext, orgConfig, repoName, task_id, org, branch,
@@ -57,8 +55,9 @@ export async function runAgent({
     iteration++;
 
     const response = await client.messages.create({
-      model: 'claude-opus-4-7',
+      model: 'claude-sonnet-4-6',
       max_tokens: 16000,
+      thinking: { type: 'enabled', budget_tokens: 8000 },
       system: SYSTEM_PROMPT,
       tools: TOOL_DEFINITIONS,
       messages,

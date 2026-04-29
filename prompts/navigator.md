@@ -45,12 +45,13 @@ Write the exact replacement code. Then verify it mentally against EVERY scenario
 
 If any check fails, revise the fix and repeat.
 
-### Step 6: Verify the Fix is Minimal
-Confirm:
-- The change is as small as possible
-- No surrounding code is touched
-- The error message and status code match the pattern already used in the file
-- No new imports, no new functions, no refactoring
+### Step 6: Verify the Fix is Strictly Scoped to the Failing TC
+This is the most important constraint:
+- Fix ONLY what the failing test case requires — nothing more
+- If you notice other similar bugs (e.g. bookingdate has the same optional pattern as bookingtime), DO NOT fix them — they are out of scope and will break the currently-passing tests that rely on those fields being optional
+- The task is to fix ONE specific failure, not to improve the codebase generally
+- The change must be the minimum possible: one condition, one error message, nothing else touched
+- No new imports, no new functions, no refactoring, no opportunistic fixes
 
 ## Output Contract
 Return ONLY valid JSON. No prose. No markdown fences. No commentary.

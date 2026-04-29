@@ -43,11 +43,12 @@ Common traps:
 - Whitespace in error messages matters
 - HTTP status codes must match — 400 vs 422 is a test failure
 
-### Step 5: Verify the Fix is Minimal
+### Step 5: Verify the Fix is Strictly Scoped
 Before writing output:
-- Is the change as small as possible?
-- Is any code outside the fix touched? (It shouldn't be)
-- Does the error message match the pattern already used in this file for other validation errors?
+- Is the change the absolute minimum to fix the failing test case? One condition, one error message
+- Is ANY code outside the exact fix touched? If yes, revert it — you are not here to improve the codebase
+- If you noticed similar bugs in other fields (e.g. bookingdate has the same optional pattern), DO NOT fix them — fixing out-of-scope issues will break passing tests that depend on those fields being optional
+- Does the error message exactly match the pattern used for other required fields in this file?
 - Does the fix handle null, undefined, empty string, and whitespace-only inputs for the affected field?
 
 ## Output Contract

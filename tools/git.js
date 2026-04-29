@@ -34,7 +34,7 @@ export function push(cwd, branch, token) {
   const credsPath = path.join(home, '.git-credentials');
   fs.writeFileSync(credsPath, `https://x-access-token:${token}@github.com\n`, { mode: 0o600 });
   exec(`git config --global credential.helper store`, { cwd });
-  const pushResult = exec(`git push origin ${branch}`, { cwd });
+  const pushResult = exec(`git push --force-with-lease origin ${branch}`, { cwd });
   if (!pushResult.success) throw new Error(`git push failed: ${pushResult.errors}`);
   return pushResult;
 }

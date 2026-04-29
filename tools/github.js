@@ -31,6 +31,16 @@ export async function listRepos(org, token) {
 }
 
 export async function createPR({ org, repo, token, title, body, head, base }) {
+  // Check if a PR already exists for this branch — return its URL if so
+  const existing = await fetch(
+    `https://api.github.com/repos/${org}/${repo}/pulls?head=${org}:${head}&state=open`,
+    { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json' } }
+  );
+  const existingData = await existing.json();
+  if (Array.isArray(existingData) && existingData.length > 0) {
+    return existingData[0].html_url; // PR already exists — return it
+  }
+
   const res = await fetch(`https://api.github.com/repos/${org}/${repo}/pulls`, {
     method: 'POST',
     headers: {

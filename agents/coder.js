@@ -8,9 +8,13 @@ import { log } from '../tools/log.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-function readFile(workspace, relPath) {
+function readFile(workspace, relPath, charLimit = 0) {
   const abs = path.join(workspace, relPath);
-  return fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '(file not found)';
+  if (!fs.existsSync(abs)) return '(file not found)';
+  const content = fs.readFileSync(abs, 'utf8');
+  return charLimit && content.length > charLimit
+    ? content.slice(0, charLimit) + '\n\n[... truncated ...]'
+    : content;
 }
 
 function buildRetryContext(manifest) {
@@ -24,17 +28,16 @@ function buildRetryContext(manifest) {
 
   if (v.tcCode) {
     lines.push(v.tcPassed
-      ? `Target ${v.tcCode}: ✅ PASSES — but regressions introduced (see below)`
+      ? `Target ${v.tcCode}: ✅ PASSES — but regressions introduced`
       : `Target ${v.tcCode}: ❌ STILL FAILING`);
   }
 
   if (v.regressions?.length) {
     lines.push(
-      `\n**Regressions you introduced** (passing before, now broken):`,
+      `\n**Regressions you introduced** (were passing before your fix, now broken):`,
       v.regressions.map(id => `  - ${id}`).join('\n'),
-      `\nThese scenarios were working before your fix. Read the UAT context file to understand`,
-      `what inputs they send and what responses they expect, then understand WHY your change`,
-      `broke their code path before writing a new fix.`
+      `\nFor each regression: find it in the UAT scenarios, trace what input it sends, trace`,
+      `your modified code for that input, and understand why it broke. Fix that before returning.`
     );
   }
 
@@ -57,14 +60,14 @@ export async function code(workspace) {
 
   await log(workspace, `🔧 Coder: applying fix to ${relevant_files.map(f => `\`${f}\``).join(', ')}...`);
 
-  // Files to edit — full content
+  // Full source files — no truncation, coder needs every line
   const fileContents = relevant_files.map(relPath =>
     `=== ${relPath} (EDIT THIS) ===\n${readFile(workspace, relPath)}`
   ).join('\n\n');
 
-  // Read-only context (UAT scenarios, shared validators)
+  // UAT scenarios — no truncation, coder must verify against every scenario
   const contextContents = (context_files ?? []).map(relPath =>
-    `=== ${relPath} (READ ONLY) ===\n${readFile(workspace, relPath).slice(0, 5000)}`
+    `=== ${relPath} (READ ONLY — verify your fix against every scenario here) ===\n${readFile(workspace, relPath)}`
   ).join('\n\n');
 
   const cachePrefix = [
@@ -72,9 +75,17 @@ export async function code(workspace) {
     contextContents ? `Reference context:\n${contextContents}` : '',
   ].filter(Boolean).join('\n\n');
 
-  const fixInstruction = suggested_fix
-    ? `\n\nSuggested fix:\n- File: ${suggested_fix.file}\n- What: ${suggested_fix.what}\n- Replace this exact code:\n\`\`\`\n${suggested_fix.current_code}\n\`\`\`\n- With this:\n\`\`\`\n${suggested_fix.replacement_code}\n\`\`\``
-    : '';
+  // If navigator produced a suggested fix, give it verbatim to the coder
+  const fixInstruction = suggested_fix ? [
+    `\n\nSuggested fix (implement this exactly):`,
+    `File: ${suggested_fix.file}`,
+    `What: ${suggested_fix.what}`,
+    `\nFind and replace this exact code:\n\`\`\`\n${suggested_fix.current_code}\n\`\`\``,
+    `\nWith this:\n\`\`\`\n${suggested_fix.replacement_code}\n\`\`\``,
+    suggested_fix.handles_cases?.length
+      ? `\nThis fix is designed to handle:\n${suggested_fix.handles_cases.map(c => `  - ${c}`).join('\n')}`
+      : '',
+  ].filter(Boolean).join('\n') : '';
 
   const retryContext = buildRetryContext(manifest);
 
@@ -94,10 +105,16 @@ export async function code(workspace) {
 
   const commit = commitAll(workspace, `fix(uat): ${manifest.task_id} - ${result.summary}`);
 
+  // Log scenario_coverage so we can see the coder's self-verification in ClickUp
+  const coverageLog = result.scenario_coverage
+    ? Object.entries(result.scenario_coverage).map(([k, v]) => `  **${k}:** ${v}`).join('\n')
+    : '(none)';
+
   writeManifest(workspace, {
     coder_output: {
       files_changed: result.files.map(f => f.path),
       summary: result.summary,
+      scenario_coverage: result.scenario_coverage ?? null,
       commit_sha: commit.output,
     },
   });
@@ -105,5 +122,6 @@ export async function code(workspace) {
   await log(workspace,
     `🔧 Coder done.\n` +
     `**Files changed:** ${result.files.map(f => `\`${f.path}\``).join(', ')}\n` +
-    `**Summary:** ${result.summary}`);
+    `**Summary:** ${result.summary}\n` +
+    `**Scenario coverage:**\n${coverageLog}`);
 }

@@ -6,11 +6,7 @@ import { listRepos } from '../tools/github.js';
 import { triageRepos } from './triage.js';
 import { prepare, cleanup } from './workspace.js';
 import { addComment, updateStatus, filterTasks } from '../tools/clickup.js';
-import { navigate } from '../agents/navigator.js';
-import { code } from '../agents/coder.js';
-import { baseline, verify } from '../agents/verifier.js';
-import { report } from '../agents/reporter.js';
-import { log } from '../tools/log.js';
+import { runAgent } from '../agent/index.js';
 
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REPOS ?? '5');
 
@@ -18,13 +14,13 @@ export async function run({ org, task_id, failure_context, status = 'agent picku
   const jobId = randomUUID();
   const orgConfig = getOrg(org);
 
-  // If no task supplied, fetch highest priority task from ClickUp
+  // Pick up task from ClickUp if not specified directly
   if (!task_id) {
     const listId = process.env.CLICKUP_LIST_ID;
     const result = await filterTasks(listId, orgConfig.clickupApiKey, status);
     const tasks = result.tasks ?? [];
     if (tasks.length === 0) {
-      console.log(`[job:${jobId}] No Agent Execute tasks found — exiting`);
+      console.log(`[job:${jobId}] No tasks found in status "${status}" — exiting`);
       return;
     }
     const priority = { urgent: 0, high: 1, normal: 2, low: 3 };
@@ -33,39 +29,35 @@ export async function run({ org, task_id, failure_context, status = 'agent picku
     task_id = top.id;
     failure_context = `${top.name}\n\n${top.description ?? ''}`.trim();
     console.log(`[job:${jobId}] Picked up task ${task_id}: ${top.name}`);
-
-    // Lock the task immediately so concurrent runs skip it
     await updateStatus(task_id, orgConfig.clickupApiKey, 'in progress');
   }
 
   console.log(`[job:${jobId}] Starting — org=${org} task=${task_id}`);
 
-  // 1. Discover repos — filter to only those with swarm.config.json enabled
+  // Discover swarm-enabled repos
   const allRepos = await listRepos(org, orgConfig.githubToken);
   const repos = await filterSwarmEnabled(allRepos, org, orgConfig.githubToken);
   console.log(`[job:${jobId}] Discovered ${allRepos.length} repos → ${repos.length} swarm-enabled`);
 
-  // 2. Triage — find relevant repos (much smaller set now)
+  // Triage to relevant repos
   const triaged = repos.length === 1
-    ? [{ repo: repos[0].name, confidence: 1.0, reason: 'Only swarm-enabled repo' }]
+    ? [{ repo: repos[0].name, confidence: 1.0 }]
     : await triageRepos(failure_context, repos);
-  console.log(`[job:${jobId}] Triaged to ${triaged.length} relevant repos`);
+  console.log(`[job:${jobId}] Triaged to ${triaged.length} relevant repo(s)`);
 
   if (triaged.length === 0) {
-    await addComment(task_id, orgConfig.clickupApiKey,
-      'Agent swarm: no repos matched with sufficient confidence. Manual review required.');
+    await addComment(task_id, orgConfig.clickupApiKey, 'No repos matched — manual review required.');
     await updateStatus(task_id, orgConfig.clickupApiKey, 'needs human');
     return;
   }
 
   await addComment(task_id, orgConfig.clickupApiKey,
-    `🤖 Agent swarm picked up this task.\n` +
-    `Discovered ${repos.length} repos → triaged to ${triaged.length} relevant: ${triaged.map(r => `\`${r.repo}\` (${Math.round(r.confidence * 100)}%)`).join(', ')}`);
+    `🤖 Agent picked up task.\nRepos: ${triaged.map(r => `\`${r.repo}\``).join(', ')}`);
 
-  // 3. Process repos in parallel (up to MAX_CONCURRENT)
+  // Run one Claude agent per repo, in parallel
   const batches = chunk(triaged, MAX_CONCURRENT);
   for (const batch of batches) {
-    await Promise.all(batch.map(({ repo: repoName }) =>
+    await Promise.allSettled(batch.map(({ repo: repoName }) =>
       processRepo({ jobId, org, orgConfig, repoName, task_id, failure_context, repos })
     ));
   }
@@ -81,52 +73,27 @@ async function processRepo({ jobId, org, orgConfig, repoName, task_id, failure_c
   let workspace;
 
   try {
-    // Clone + branch
     workspace = await prepare(jobId, repoName, repoMeta.clone_url, branch, orgConfig.githubToken);
 
-    // Write job manifest
-    const jobManifest = {
+    // Read swarm.config.json from the cloned workspace
+    const swarmConfigPath = path.join(workspace, 'swarm.config.json');
+    const swarmConfig = fs.existsSync(swarmConfigPath)
+      ? JSON.parse(fs.readFileSync(swarmConfigPath, 'utf8'))
+      : {};
+
+    writeManifest(workspace, {
       job_id: jobId, org, task_id, failure_context,
       repo: repoName, workspace,
-      clickup_api_key: orgConfig.clickupApiKey,
-      navigator_output: null, coder_output: null,
-      verifier_output: null, reporter_output: null,
-    };
-    writeManifest(workspace, jobManifest);
+      swarm_config: swarmConfig,
+    });
 
-    // Run pipeline
-    await navigate(workspace, failure_context);
-    await baseline(workspace); // pre-fix pass rate — used by verifier to detect regressions
-    await code(workspace);
-
-    // UAT loop — iterate until 97% or max attempts
-    const MAX_ATTEMPTS = parseInt(process.env.MAX_UAT_ATTEMPTS ?? '5');
-    let attempt = 1;
-    let verifierPassed = false;
-
-    while (attempt <= MAX_ATTEMPTS) {
-      await verify(workspace, attempt);
-      const { passed, passRate, regressions, improvements } = readManifest(workspace).verifier_output;
-
-      if (passed) { verifierPassed = true; break; }
-      if (attempt === MAX_ATTEMPTS) break;
-
-      const delta = [
-        regressions?.length ? `${regressions.length} regression(s)` : '',
-        improvements?.length ? `${improvements.length} improvement(s)` : '',
-      ].filter(Boolean).join(', ') || 'no change';
-
-      await log(workspace, `🔁 Retrying fix (attempt ${attempt + 1}/${MAX_ATTEMPTS}) — ${passRate ?? '?'}% pass rate, ${delta}`);
-      await code(workspace);
-      attempt++;
-    }
-
-    await report({ workspace, org, orgConfig, repoName, task_id, branch, passed: verifierPassed });
+    // One Claude agent does everything: read → diagnose → fix → verify → PR
+    await runAgent({ workspace, failureContext: failure_context, orgConfig, repoName, task_id, org, branch });
 
   } catch (err) {
     console.error(`[job:${jobId}] ${repoName} failed: ${err.message}`);
-    await addComment(task_id, orgConfig.clickupApiKey,
-      `Error processing ${repoName}: ${err.message}`);
+    await addComment(task_id, orgConfig.clickupApiKey, `❌ Error on \`${repoName}\`: ${err.message}`);
+    await updateStatus(task_id, orgConfig.clickupApiKey, orgConfig.statusFailed);
   } finally {
     if (workspace) cleanup(jobId, repoName);
   }
@@ -155,14 +122,11 @@ async function filterSwarmEnabled(repos, org, token) {
       const enabled = config.enabled !== false;
       if (enabled) console.log(`[filter] swarm-enabled: ${repo.name}`);
       return enabled ? repo : null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   }));
   const enabled = results.filter(Boolean);
-  // Fallback: if no opted-in repos found (token lacks contents:read), use all repos
   if (enabled.length === 0) {
-    console.log('[filter] No swarm.config.json found — falling back to full repo list for triage');
+    console.log('[filter] No swarm.config.json — falling back to all repos');
     return repos;
   }
   return enabled;

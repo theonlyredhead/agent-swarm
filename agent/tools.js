@@ -225,12 +225,20 @@ export function createToolHandlers(workspace, testCommand, orgConfig, task_id) {
       const passed = report?.summary?.passed ?? null;
       const total = report?.summary?.total ?? count;
 
+      const verdict = passRate === null ? 'no report'
+        : passRate >= 95 ? 'TC FIXED ✅'
+        : passRate >= 80 ? 'PARTIAL — fix may be incomplete ⚠️'
+        : 'TC STILL FAILING ❌';
+
+      console.log(`[agent] verify_tc: ${passRate}% (${passed}/${total}) — ${verdict}`);
+
       return JSON.stringify({
         tc_description,
         pass_rate: passRate,
         passed,
         total,
-        verdict: passRate !== null ? (passRate >= 80 ? 'TC FIXED ✅' : 'TC STILL FAILING ❌') : 'no report',
+        verdict,
+        target: '95%',
         output: (result.output || '').slice(-1500),
       }, null, 2);
     },

@@ -18,7 +18,7 @@ const SYSTEM_PROMPT = `You are a senior software engineer autonomously fixing a 
 5. run_tests(count: 20) — establish baseline pass rate
 6. patch_file() — apply the minimal fix. Copy the find string verbatim from the file
 7. verify_tc() — run a targeted test specifically for the failing TC scenario. This is your primary pass signal
-8. If verify_tc passes (≥80%): call complete(status: 'success')
+8. If verify_tc passes (≥95%): call complete(status: 'success')
 9. If verify_tc fails: read the output, understand why, try a different fix. Max 3 attempts
 10. After 3 failed attempts: complete(status: 'escalate')
 

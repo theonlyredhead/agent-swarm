@@ -147,13 +147,35 @@ export async function code(workspace) {
     cacheUserPrefix: cachePrefix,
     userMessage: `Root cause: ${root_cause_summary}${fixInstruction}${retryContext}`,
     model: 'claude-sonnet-4-6',
-    maxTokens: 16000,
+    maxTokens: 8000,
   });
 
-  for (const { path: filePath, new_content } of result.files) {
+  // Apply patch-style changes — find/replace, never the full file
+  const filesChanged = [];
+  for (const { file: filePath, find, replace } of result.changes ?? []) {
     const absPath = path.join(workspace, filePath);
-    fs.mkdirSync(path.dirname(absPath), { recursive: true });
-    fs.writeFileSync(absPath, new_content, 'utf8');
+    if (!fs.existsSync(absPath)) {
+      await log(workspace, `⚠️ Coder: file not found — ${filePath}`);
+      continue;
+    }
+    const content = fs.readFileSync(absPath, 'utf8');
+    const norm = s => s.replace(/\r\n/g, '\n');
+    const normContent = norm(content);
+    const normFind = norm(find);
+    if (!normContent.includes(normFind)) {
+      await log(workspace, `⚠️ Coder: \`find\` string not found in ${filePath} — skipping`);
+      continue;
+    }
+    fs.writeFileSync(absPath, normContent.replace(normFind, norm(replace)), 'utf8');
+    filesChanged.push(filePath);
+  }
+
+  if (filesChanged.length === 0) {
+    await log(workspace, `❌ Coder: no changes applied — all find strings missing from files`);
+    writeManifest(workspace, {
+      verifier_output: { passed: false, passRate: null, errors: 'Coder produced no applicable changes' },
+    });
+    return;
   }
 
   const commit = commitAll(workspace, `fix(uat): ${manifest.task_id} - ${result.summary}`);
@@ -164,7 +186,7 @@ export async function code(workspace) {
 
   writeManifest(workspace, {
     coder_output: {
-      files_changed: result.files.map(f => f.path),
+      files_changed: filesChanged,
       summary: result.summary,
       scenario_coverage: result.scenario_coverage ?? null,
       commit_sha: commit.output,
@@ -173,7 +195,7 @@ export async function code(workspace) {
 
   await log(workspace,
     `🔧 Coder done.\n` +
-    `**Files changed:** ${result.files.map(f => `\`${f.path}\``).join(', ')}\n` +
+    `**Files changed:** ${filesChanged.map(f => `\`${f}\``).join(', ')}\n` +
     `**Summary:** ${result.summary}\n` +
     `**Scenario coverage:**\n${coverageLog}`);
 }

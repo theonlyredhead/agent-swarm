@@ -60,7 +60,7 @@ Return ONLY valid JSON. No prose. No markdown fences. No commentary.
 {
   "relevant_files": ["path/to/file.js"],
   "context_files": ["uat-agent/index.js"],
-  "root_cause_summary": "Precise: function name, what the current code does wrong (quote the buggy code), what it should do, and why the existing passing tests are not affected by the fix.",
+  "root_cause_summary": "Precise: function name, the exact buggy code (quoted), what it should do instead. IMPORTANT: describe ONLY the specific field named in the failing TC — do not mention other fields with similar patterns, even if you noticed them. They are out of scope.",
   "suggested_fix": {
     "file": "path/to/file.js",
     "what": "One sentence describing the change",

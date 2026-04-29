@@ -24,9 +24,12 @@ export function commitAll(cwd, message) {
 }
 
 export function push(cwd, branch, token) {
-  const result = exec(`git remote get-url origin`, { cwd });
-  const authedUrl = result.output.replace('https://', `https://${token}@`);
-  exec(`git remote set-url origin ${authedUrl}`, { cwd });
+  // Write credentials via git credential store — avoids shell quoting issues
+  // when the token contains special chars or is very long
+  const home = process.env.HOME ?? '/root';
+  const credsPath = path.join(home, '.git-credentials');
+  fs.writeFileSync(credsPath, `https://x-access-token:${token}@github.com\n`, { mode: 0o600 });
+  exec(`git config --global credential.helper store`, { cwd });
   const pushResult = exec(`git push origin ${branch}`, { cwd });
   if (!pushResult.success) throw new Error(`git push failed: ${pushResult.errors}`);
   return pushResult;

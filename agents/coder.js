@@ -18,40 +18,42 @@ function buildRetryContext(manifest) {
   if (!v) return '';
 
   const lines = [
-    `\n\n## Previous fix attempt FAILED — read this carefully before writing a new fix`,
-    `Pass rate: ${v.passRate ?? 'unknown'}% (baseline was ${v.baselinePassRate ?? v.passRate ?? 'unknown'}%)`,
+    '\n\n## Previous fix attempt FAILED — diagnose before rewriting',
+    `Pass rate: ${v.passRate ?? 'unknown'}% (baseline was ${v.baselinePassRate ?? 'unknown'}%)`,
   ];
 
   if (v.tcCode) {
     lines.push(v.tcPassed
-      ? `Target ${v.tcCode}: ✅ PASSES — but you introduced regressions (see below)`
+      ? `Target ${v.tcCode}: ✅ PASSES — but regressions introduced (see below)`
       : `Target ${v.tcCode}: ❌ STILL FAILING`);
   }
 
   if (v.regressions?.length) {
-    lines.push(`\n**Regressions you introduced** (were passing before, now broken by your fix):`);
-    lines.push(v.regressions.map(id => `  - ${id}`).join('\n'));
-    lines.push(`\nThese were working correctly before you touched the code. Your fix broke them.`);
-    lines.push(`Read the UAT scenario file and the source file carefully — understand what inputs`);
-    lines.push(`these tests send and why your change broke their path before writing a new fix.`);
+    lines.push(
+      `\n**Regressions you introduced** (passing before, now broken):`,
+      v.regressions.map(id => `  - ${id}`).join('\n'),
+      `\nThese scenarios were working before your fix. Read the UAT context file to understand`,
+      `what inputs they send and what responses they expect, then understand WHY your change`,
+      `broke their code path before writing a new fix.`
+    );
   }
 
   if (v.improvements?.length) {
-    lines.push(`\n**Improvements** (now passing that weren't before):`);
-    lines.push(v.improvements.map(id => `  - ${id}`).join('\n'));
+    lines.push(
+      `\n**Improvements** (now passing):`,
+      v.improvements.map(id => `  - ${id}`).join('\n')
+    );
   }
 
   const testOutput = (v.errors || v.output || '').trim().slice(0, 3000);
-  if (testOutput) {
-    lines.push(`\n**Test output:**\n\`\`\`\n${testOutput}\n\`\`\``);
-  }
+  if (testOutput) lines.push(`\n**Test output:**\n\`\`\`\n${testOutput}\n\`\`\``);
 
   return lines.join('\n');
 }
 
 export async function code(workspace) {
   const manifest = readManifest(workspace);
-  const { relevant_files, context_files, root_cause_summary } = manifest.navigator_output;
+  const { relevant_files, context_files, root_cause_summary, suggested_fix } = manifest.navigator_output;
 
   await log(workspace, `🔧 Coder: applying fix to ${relevant_files.map(f => `\`${f}\``).join(', ')}...`);
 
@@ -60,27 +62,30 @@ export async function code(workspace) {
     `=== ${relPath} (EDIT THIS) ===\n${readFile(workspace, relPath)}`
   ).join('\n\n');
 
-  // Context files — read for understanding, do not edit
+  // Read-only context (UAT scenarios, shared validators)
   const contextContents = (context_files ?? []).map(relPath =>
-    `=== ${relPath} (READ ONLY — understand what inputs tests send) ===\n${readFile(workspace, relPath).slice(0, 4000)}`
+    `=== ${relPath} (READ ONLY) ===\n${readFile(workspace, relPath).slice(0, 5000)}`
   ).join('\n\n');
 
   const cachePrefix = [
     `Files to edit:\n${fileContents}`,
-    contextContents ? `Reference context (do not edit):\n${contextContents}` : '',
+    contextContents ? `Reference context:\n${contextContents}` : '',
   ].filter(Boolean).join('\n\n');
+
+  const fixInstruction = suggested_fix
+    ? `\n\nSuggested fix:\n- File: ${suggested_fix.file}\n- What: ${suggested_fix.what}\n- Replace this exact code:\n\`\`\`\n${suggested_fix.current_code}\n\`\`\`\n- With this:\n\`\`\`\n${suggested_fix.replacement_code}\n\`\`\``
+    : '';
 
   const retryContext = buildRetryContext(manifest);
 
   const result = await promptJson({
     systemFile: path.join(__dirname, '../prompts/coder.md'),
     cacheUserPrefix: cachePrefix,
-    userMessage: `Task: ${manifest.task_id}\nRoot cause: ${root_cause_summary}${retryContext}`,
+    userMessage: `Root cause: ${root_cause_summary}${fixInstruction}${retryContext}`,
     model: 'claude-sonnet-4-6',
     maxTokens: 16000,
   });
 
-  // Apply the fix
   for (const { path: filePath, new_content } of result.files) {
     const absPath = path.join(workspace, filePath);
     fs.mkdirSync(path.dirname(absPath), { recursive: true });

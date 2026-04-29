@@ -83,8 +83,20 @@ function readWithImports(workspace, relPath, alreadyRead) {
 }
 
 function selectSourceFiles(workspace, tree, entryPoints) {
-  // Prefer explicitly declared entry points
-  if (entryPoints?.length) return entryPoints;
+  // Prefer explicitly declared entry points — expand directories to their JS files
+  if (entryPoints?.length) {
+    return entryPoints.flatMap(ep => {
+      const abs = path.join(workspace, ep);
+      if (!fs.existsSync(abs)) return [ep];
+      const stat = fs.statSync(abs);
+      if (stat.isDirectory()) {
+        return fs.readdirSync(abs)
+          .filter(f => f.endsWith('.js') && !f.endsWith('.test.js') && !f.endsWith('.spec.js'))
+          .map(f => path.join(ep.replace(/\/$/, ''), f));
+      }
+      return [ep];
+    });
+  }
 
   // Fall back to pattern-matched files from tree, sorted by specificity
   const all = extractPaths(tree).filter(p =>
@@ -93,7 +105,6 @@ function selectSourceFiles(workspace, tree, entryPoints) {
     !p.includes('node_modules') && !p.includes('uat-agent')
   );
 
-  // Score: more specific patterns rank higher
   const scored = all.map(p => {
     let score = 0;
     if (/lambda[-_].+\.js$/.test(p)) score += 10;
